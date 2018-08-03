@@ -24,8 +24,10 @@ import com.alibaba.dubbo.common.utils.ConfigUtils;
 import com.alibaba.dubbo.common.utils.NamedThreadFactory;
 import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.monitor.MonitorService;
+import com.alibaba.dubbo.monitor.dubbo.Statistics;
 import com.alibaba.dubbo.monitor.simple.common.CountUtils;
 
+import com.alibaba.fastjson.JSON;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.DateAxis;
@@ -33,6 +35,7 @@ import org.jfree.chart.plot.XYPlot;
 import org.jfree.data.time.Minute;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
+import org.springframework.http.HttpStatus;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -43,6 +46,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -56,6 +60,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * SimpleMonitorService
@@ -175,6 +180,8 @@ public class SimpleMonitorService implements MonitorService {
         }
     }
 
+
+
     public void close() {
         try {
             running = false;
@@ -189,11 +196,49 @@ public class SimpleMonitorService implements MonitorService {
         }
     }
 
+
+    /*
+        发送到日志项目 做持久化
+     */
+    private void persist(URL statistics){
+        String persistUrl = ConfigUtils.getProperty("statistics-persist-url");
+        if(persistUrl==null||persistUrl.equals("")){
+            logger.warn("没有指定statistics-persist-url,监控数据将无法持久化");
+            return;
+        }else{
+            try {
+                logger.debug("persistUrl:"+persistUrl);
+                java.net.URL url = new java.net.URL(persistUrl);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setDoOutput(true);
+                conn.getOutputStream().write(JSON.toJSONString(statistics.getParameters()).getBytes());
+                conn.getOutputStream().flush();
+                conn.connect();
+                if(conn.getResponseCode()== HttpStatus.OK.value()){
+                    logger.info("持久化statistics成功");
+                }else{
+                    logger.error("持久化statistics失败");
+                }
+            }catch(IOException e){
+                logger.error("持久化statistics失败",e);
+            }
+        }
+
+    }
+
     //负责对统计数据做持久化 用了阻塞队列,当队列没有数据时，线程被挂起
     private void write() throws Exception {
 
         URL statistics = queue.take();
         logger.debug("开始持久化监控数据:"+statistics);
+
+
+
+        persist(statistics);
+
+
         if (POISON_PROTOCOL.equals(statistics.getProtocol())) {
             return;
         }

@@ -29,12 +29,12 @@ import java.util.Properties;
 public class MonitorStarter {
     private static Logger logger= LoggerFactory.getLogger(MonitorStarter.class);
     public static void main(String[] args) throws IOException {
-        //System.setProperty(Constants.DUBBO_PROPERTIES_KEY, "conf/dubbo.properties");
-        setConfig();
+        System.setProperty(Constants.DUBBO_PROPERTIES_KEY, "conf/dubbo.properties");
         Main.main(args);
 
     }
 
+    @Deprecated
     private static void setConfig() throws IOException {
         //读取公共配置
         Properties p = new Properties();
